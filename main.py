@@ -6,11 +6,9 @@ import torchvision.transforms as transforms
 from torch.utils.data import random_split
 import torch.optim as optim
 import torch.nn as nn
-import torch.nn.functional as F
-from loss.partial_loss import LabelWiseSignificanceCrossEntropy, AdaptiveMaskedCrossEntropyLoss
 from loss.dynamic_encoding import SwitchEncoding
 from model_define.defined_model import KMNISTNet, CIFARNet, CIFARNet_Infer, IMAGENET
-from cv.define_model import ViTForImageClassification
+# from cv.define_model import ViTForImageClassification
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torchvision.models as models
 import os
@@ -32,10 +30,9 @@ model_names = sorted(name for name in models.__dict__
 parser = argparse.ArgumentParser(description='Train Model')
 parser.add_argument('--epoch', '-e', dest='epoch', default=100, help='epoch')
 parser.add_argument('--dataset', '-d', dest='dataset', default="CIFAR10", help='dataset', required=False)
-parser.add_argument('--opt_alg', '-a', dest='opt_alg', default="SGD", help='opt_alg', required=False)
-parser.add_argument('--lossfunction', '-l', dest='lossfunction', default="MASKEDLABEL", help='lossfunction', required=False)
+parser.add_argument('--opt_alg', '-a', dest='opt_alg', default="ADAM", help='opt_alg', required=False)
 parser.add_argument('--lr', '-lr', dest='lr', type=float, default=1e-4, help='learning rate')
-parser.add_argument('--labelswitch', '-ls', dest='ls', type=bool, default=False, help='labelswitch')
+parser.add_argument('--labelswitch', '-ls', dest='labelswitch', type=bool, default=False, help='labelswitch')
 
 
 args = parser.parse_args()
@@ -246,7 +243,7 @@ else:
     raise Exception("Unable to support the data {}".format(args.dataset))
 
 if args.labelswitch:
-    labelswitch = SwitchEncoding(dataclasses_num)
+    labelswitch = SwitchEncoding(dataclasses_num, device=device)
 else:
     labelswitch = None
 
@@ -263,9 +260,7 @@ criterion = nn.CrossEntropyLoss()
 # from model_define.hugging_face_vit import ViTForImageClassification
 
 def defineopt(model):
-    if args.opt_alg == 'SGD':
-        optimizer = optim.SGD(model.parameters(), lr=args.lr)
-    elif args.opt_alg == "ADAM":
+    if args.opt_alg == "ADAM":
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
     elif args.opt_alg == "RMSprop":
         optimizer = optim.RMSprop(model.parameters(), lr=args.lr)
@@ -322,6 +317,8 @@ def L2_reg(parameters):
     return torch.round(L2).item()
 
 def save_model(net, model_path):
+    if not os.path.exists(os.path.dirname(model_path)):
+        os.makedirs(os.path.dirname(model_path))
     torch.save(net.state_dict(), model_path)
 
 
@@ -358,7 +355,7 @@ for t in range(10): # train model 10 times
             optimizer.zero_grad()
             running_loss += loss.item()
             # print("{} step loss is {}".format(i, loss.item()))
-        model_path = os.path.join(current_folder, 'model', '{}_{}_{}_net.pth'.format(args.dataset, args.opt_alg, args.lossfunction))
+        model_path = os.path.join(current_folder, 'model', '{}_{}_{}_net.pth'.format(args.dataset, args.opt_alg, "ls" if args.labelswitch else "nols"))
         save_model(net, model_path)
         acc_epoch = run_test(model_path)
         # scheduler.step(metrics=acc_epoch)
@@ -367,7 +364,7 @@ for t in range(10): # train model 10 times
         acc.append([epoch, acc_epoch, round(running_loss, 2), L2])
         print("{} epoch acc is {}, L2 is {}".format(epoch, acc_epoch, L2))
     print('Finished Training')
-    result_file = os.path.join(os.path.join(current_folder, 'result', '{}_{}_{}_result'.format(args.dataset, args.opt_alg, args.lossfunction), "{}.csv".format(str(t))))
+    result_file = os.path.join(os.path.join(current_folder, 'result', '{}_{}_{}_result'.format(args.dataset, args.opt_alg, "ls" if args.labelswitch else "nols"), "{}.csv".format(str(t))))
     if not os.path.exists(os.path.dirname(result_file)):
         os.makedirs(os.path.dirname(result_file))
     pd.DataFrame(acc).to_csv(result_file, header=["epoch", "training_acc", "training_loss", "L2"], index=False)
