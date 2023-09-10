@@ -1,19 +1,27 @@
-# code reference https://huggingface.co/docs/transformers/tasks/translation
+# reference https://huggingface.co/docs/transformers/tasks/translation
+from transformers import AutoTokenizer
+checkpoint = "t5-small"
+tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+
+from datasets import load_dataset
+
+
+books = load_dataset("opus_books", "en-fr")
+books = books["train"].train_test_split(test_size=0.2)
+
 from transformers import AutoTokenizer
 
 checkpoint = "t5-small"
 tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-
 source_lang = "en"
 target_lang = "fr"
 prefix = "translate English to French: "
-
-
 def preprocess_function(examples):
     inputs = [prefix + example[source_lang] for example in examples["translation"]]
     targets = [example[target_lang] for example in examples["translation"]]
     model_inputs = tokenizer(inputs, text_target=targets, max_length=128, truncation=True)
     return model_inputs
+
 
 tokenized_books = books.map(preprocess_function, batched=True)
 
@@ -21,10 +29,10 @@ from transformers import DataCollatorForSeq2Seq
 
 data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=checkpoint)
 
-
 import evaluate
 
 metric = evaluate.load("sacrebleu")
+
 
 import numpy as np
 
@@ -54,28 +62,3 @@ def compute_metrics(eval_preds):
     result["gen_len"] = np.mean(prediction_lens)
     result = {k: round(v, 4) for k, v in result.items()}
     return result
-
-
-from transformers import AdamWeightDecay
-
-optimizer = AdamWeightDecay(learning_rate=2e-5, weight_decay_rate=0.01)
-
-from transformers import AutoModelForSeq2SeqLM, Seq2SeqTrainingArguments, Seq2SeqTrainer
-
-model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint)
-
-
-
-from transformers import AutoTokenizer
-
-tokenizer = AutoTokenizer.from_pretrained("my_awesome_opus_books_model")
-inputs = tokenizer(text, return_tensors="pt").input_ids
-
-
-from transformers import AutoModelForSeq2SeqLM
-
-model = AutoModelForSeq2SeqLM.from_pretrained("my_awesome_opus_books_model")
-outputs = model.generate(inputs, max_new_tokens=40, do_sample=True, top_k=30)
-
-tokenizer.decode(outputs[0], skip_special_tokens=True)
-

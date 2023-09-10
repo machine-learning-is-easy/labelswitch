@@ -8,7 +8,7 @@ import torch.optim as optim
 import torch.nn as nn
 from loss.dynamic_encoding import SwitchEncoding
 from model_define.defined_model import KMNISTNet, CIFARNet, CIFARNet_Infer, IMAGENET
-# from cv.define_model import ViTForImageClassification
+from vit.vit import ViTForImageClassification
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torchvision.models as models
 import os
@@ -30,6 +30,7 @@ model_names = sorted(name for name in models.__dict__
 parser = argparse.ArgumentParser(description='Train Model')
 parser.add_argument('--epoch', '-e', dest='epoch', default=100, help='epoch')
 parser.add_argument('--dataset', '-d', dest='dataset', default="CIFAR10", help='dataset', required=False)
+parser.add_argument('--model', '-m', dest='model', default="CIFARNet", help='model', required=False)
 parser.add_argument('--opt_alg', '-a', dest='opt_alg', default="ADAM", help='opt_alg', required=False)
 parser.add_argument('--lr', '-lr', dest='lr', type=float, default=1e-4, help='learning rate')
 parser.add_argument('--labelswitch', '-ls', dest='labelswitch', type=bool, default=False, help='labelswitch')
@@ -80,9 +81,14 @@ if args.dataset == "CIFAR10":
     image_size = trainset.data.shape[1]
     dataclasses_num = len(trainset.classes)
 
-    net = CIFARNet(num_class=dataclasses_num, num_channel=num_channel)
-    net = net.to(device)
+    if args.model == "CIFARNet":
+        net = CIFARNet(num_class=dataclasses_num, num_channel=num_channel)
+    elif args.model == "vit":
+        net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
+    else:
+        raise Exception("Unable to support model type of {}".args.model)
 
+    net = net.to(device)
 
 elif args.dataset == "CIFAR100":
     transform = transforms.Compose([transforms.ToTensor()])
@@ -100,9 +106,12 @@ elif args.dataset == "CIFAR100":
     image_size = trainset.data.shape[1]
     dataclasses_num = len(trainset.classes)
 
-    # net = CIFARNet(num_class=dataclasses_num, num_channel=num_channel)
-    net = CIFARNet(num_class=dataclasses_num, num_channel=num_channel)
-    # net = ViTForImageClassification(num_labels=dataclasses_num)
+    if args.model == "CIFARNet":
+        net = CIFARNet(num_class=dataclasses_num, num_channel=num_channel)
+    elif args.model == "vit":
+        net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
+    else:
+        raise Exception("Unable to support model type of {}".args.model)
     net = net.to(device)
 
 elif args.dataset == 'IMAGENET':
@@ -257,8 +266,6 @@ criterion = nn.CrossEntropyLoss()
 # take 3-channel images (instead of 1-channel images as it was defined).
 
 
-# from model_define.hugging_face_vit import ViTForImageClassification
-
 def defineopt(model):
     if args.opt_alg == "ADAM":
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -323,7 +330,7 @@ def save_model(net, model_path):
 
 
 # 4. Train the network
-for t in range(10): # train model 10 times
+for t in range(10):  # train model 10 times
     acc = []
     for epoch in range(1,int(args.epoch)):  # loop over the dataset multiple times
         running_loss = 0.0
@@ -354,17 +361,16 @@ for t in range(10): # train model 10 times
             # zero the parameter gradients
             optimizer.zero_grad()
             running_loss += loss.item()
-            # print("{} step loss is {}".format(i, loss.item()))
-        model_path = os.path.join(current_folder, 'model', '{}_{}_{}_net.pth'.format(args.dataset, args.opt_alg, "ls" if args.labelswitch else "nols"))
+        model_path = os.path.join(current_folder, 'model', '{}_{}_{}_net.pth'.format(args.dataset, args.model, "ls" if args.labelswitch else "nols"))
         save_model(net, model_path)
         acc_epoch = run_test(model_path)
         # scheduler.step(metrics=acc_epoch)
         acc_epoch = round(acc_epoch, 2)
         L2 = L2_reg(net.parameters())
         acc.append([epoch, acc_epoch, round(running_loss, 2), L2])
-        print("{} epoch acc is {}, L2 is {}".format(epoch, acc_epoch, L2))
-    print('Finished Training')
-    result_file = os.path.join(os.path.join(current_folder, 'result', '{}_{}_{}_result'.format(args.dataset, args.opt_alg, "ls" if args.labelswitch else "nols"), "{}.csv".format(str(t))))
+        print("{} time {} epoch acc is {}, L2 is {}".format(t, epoch, acc_epoch, L2))
+        print("Finish {} time training".format(t))
+    result_file = os.path.join(os.path.join(current_folder, 'result', '{}_{}_{}_result'.format(args.dataset, args.model, "ls" if args.labelswitch else "nols"), "{}.csv".format(str(t))))
     if not os.path.exists(os.path.dirname(result_file)):
         os.makedirs(os.path.dirname(result_file))
     pd.DataFrame(acc).to_csv(result_file, header=["epoch", "training_acc", "training_loss", "L2"], index=False)
