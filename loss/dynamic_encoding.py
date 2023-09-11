@@ -17,8 +17,16 @@ class SwitchEncoding(torch.nn.Module):
             else:
                 return torch.inner(outputs, self.encode_transfer)
         else:
+            if len(outputs.shape) != len(labels.shape) + 1:
+                raise Exception("Expected the dimension of output equal dimension of label + 1")
+
+            if outputs.shape[-1] != self.num_labels:
+                raise Exception("Expect the last dimension of output equal number of label of this object")
+
+            outputs = outputs.view(-1, self.num_labels)
+            labels = labels.flatten()
             if self.unswitched:  # still has some label need to be switched
-                for y, label in zip(outputs, labels):
+                for y, label in zip(outputs, labels):  # remove batch dimension
                     switched_y_row = torch.argmax(torch.inner(y, self.encode_transfer))
                     if switched_y_row.item() != label.item():
                         # change label to y
@@ -41,6 +49,6 @@ class SwitchEncoding(torch.nn.Module):
                 else:
                     # convert all the encode_transfer matrix to index_selection
                     self.index_selection = torch.argmax(self.encode_transfer, 1)
-                    return torch.index_select(outputs, 1, self.index_selection)
+                    return torch.index_select(outputs, -1, self.index_selection)
             else:
-                return torch.index_select(outputs, 1, self.index_selection)
+                return torch.index_select(outputs, -1, self.index_selection)

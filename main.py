@@ -287,10 +287,9 @@ def define_scheduler(optimizer):
     return ReduceLROnPlateau(optimizer, patience=10)
 scheduler = define_scheduler(optimizer)
 ########################################################################
-def run_test(model_path):
+def run_test(net):
     correct = 0
     total = 0
-    net.load_state_dict(torch.load(model_path))
     # since we're not training, we don't need to calculate the gradients for our outputs
     with torch.no_grad():
         for data in testloader:
@@ -362,14 +361,12 @@ for t in range(10):  # train model 10 times
             optimizer.zero_grad()
             running_loss += loss.item()
         model_path = os.path.join(current_folder, 'model', '{}_{}_{}_net.pth'.format(args.dataset, args.model, "ls" if args.labelswitch else "nols"))
-        save_model(net, model_path)
-        acc_epoch = run_test(model_path)
+        acc_epoch = run_test(net)
         # scheduler.step(metrics=acc_epoch)
         acc_epoch = round(acc_epoch, 2)
         L2 = L2_reg(net.parameters())
         acc.append([epoch, acc_epoch, round(running_loss, 2), L2])
         print("{} time {} epoch acc is {}, L2 is {}".format(t, epoch, acc_epoch, L2))
-        print("Finish {} time training".format(t))
     result_file = os.path.join(os.path.join(current_folder, 'result', '{}_{}_{}_result'.format(args.dataset, args.model, "ls" if args.labelswitch else "nols"), "{}.csv".format(str(t))))
     if not os.path.exists(os.path.dirname(result_file)):
         os.makedirs(os.path.dirname(result_file))
