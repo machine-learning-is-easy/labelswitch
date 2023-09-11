@@ -2,7 +2,6 @@
 from transformers import AutoTokenizer
 checkpoint = "t5-small"
 tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-
 from datasets import load_dataset
 
 

@@ -73,6 +73,6 @@ def compute_metrics(pred):
     pred_str = processor.batch_decode(pred_ids)
     label_str = processor.batch_decode(pred.label_ids, group_tokens=False)
 
-    wer = wer.compute(predictions=pred_str, references=label_str)
+    wer_comput = wer.compute(predictions=pred_str, references=label_str)
 
-    return {"wer": wer}
+    return {"wer": wer_comput}
