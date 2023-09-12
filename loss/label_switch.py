@@ -25,7 +25,7 @@ class LabelSwitch(torch.nn.Module):
             labels = labels.flatten()
             if self.unswitched:  # still has some label need to be switched
                 for y, label in zip(outputs, labels):  # remove batch dimension
-                    switched_y_row = torch.argmax(torch.inner(y, self.encode_transfer))
+                    switched_y_row = torch.argmax(torch.index_select(y, -1, self.index_selection))
                     if switched_y_row.item() != label.item():
                         # change label to y
                         if label.item() in self.unswitched:
@@ -37,12 +37,10 @@ class LabelSwitch(torch.nn.Module):
                             _unit = torch.index_select(_unit, 0, torch.tensor(select_col))
                             _unit = _unit.to(self.device)
                             self.encode_transfer = torch.inner(self.encode_transfer, _unit)
+                            self.index_selection = torch.argmax(self.encode_transfer, 1)
                             self.unswitched.remove(label.item())
                     else:
                         if label.item() in self.unswitched:
                             self.unswitched.remove(label.item())
-                # convert 2D matrix to index selection operation
-                self.index_selection = torch.argmax(self.encode_transfer, 1)
-                return torch.index_select(outputs, -1, self.index_selection)
             else:
                 return torch.index_select(outputs, -1, self.index_selection)
