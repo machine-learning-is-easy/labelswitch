@@ -85,6 +85,9 @@ if args.dataset == "CIFAR10":
         net = CIFARNet(num_class=dataclasses_num, num_channel=num_channel)
     elif args.model == "vit":
         net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
+    elif args.model == 'resnet':
+        from resnet.model import ResNet
+        net = ResNet(dataclasses_num)
     else:
         raise Exception("Unable to support model type of {}".args.model)
 
@@ -110,6 +113,9 @@ elif args.dataset == "CIFAR100":
         net = CIFARNet(num_class=dataclasses_num, num_channel=num_channel)
     elif args.model == "vit":
         net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
+    elif args.model == 'resnet':
+        from resnet.model import ResNet
+        net = ResNet(dataclasses_num)
     else:
         raise Exception("Unable to support model type of {}".args.model)
     net = net.to(device)
@@ -268,7 +274,7 @@ criterion = nn.CrossEntropyLoss()
 
 def defineopt(model):
     if args.opt_alg == "ADAM":
-        optimizer = optim.Adam(model.parameters(), lr=args.lr)
+        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-4)
     elif args.opt_alg == "RMSprop":
         optimizer = optim.RMSprop(model.parameters(), lr=args.lr)
     elif args.opt_alg == "RADAM":
@@ -389,6 +395,13 @@ for t in range(10):  # train model 10 times
         del net
         del optimizer
         net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
+        net = net.to(device)
+        optimizer = defineopt(net)
+        scheduler = define_scheduler(optimizer)
+    elif isinstance(net, ResNet):
+        del net
+        del optimizer
+        net = ResNet(dataclasses_num)
         net = net.to(device)
         optimizer = defineopt(net)
         scheduler = define_scheduler(optimizer)

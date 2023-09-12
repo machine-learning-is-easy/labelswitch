@@ -7,7 +7,7 @@ import torch.nn as nn
 class ViTForImageClassification(nn.Module):
     def __init__(self, num_labels, image_size):
         super(ViTForImageClassification, self).__init__()
-        configuration = ViTConfig(num_hidden_layers=2, num_attention_heads=16, hidden_size=256, intermediate_size=128,
+        configuration = ViTConfig(num_hidden_layers=12, num_attention_heads=16, hidden_size=256, intermediate_size=128,
                                   encoder_stride=1, image_size=image_size, num_labels=num_labels)
         configuration.use_bfloat16 = True
         self.vit = ViTModel(configuration)
