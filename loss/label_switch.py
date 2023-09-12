@@ -1,10 +1,11 @@
 import torch
 
-class SwitchEncoding(torch.nn.Module):
+class LabelSwitch(torch.nn.Module):
     def __init__(self, num_labels, device=None):
         super().__init__()
         self.encode_transfer = torch.eye(num_labels, requires_grad=False)
         self.unswitched = set([_ for _ in range(num_labels)])
+        self.index_selection = torch.tensor([_ for _ in range(num_labels)])
         self.num_labels = num_labels
 
         if device and device.type != "cpu":
@@ -43,12 +44,8 @@ class SwitchEncoding(torch.nn.Module):
                     else:
                         if label.item() in self.unswitched:
                             self.unswitched.remove(label.item())
-                # checking if the labels has been switched
-                if self.unswitched:
-                    return torch.inner(outputs, self.encode_transfer)
-                else:
-                    # convert all the encode_transfer matrix to index_selection
-                    self.index_selection = torch.argmax(self.encode_transfer, 1)
-                    return torch.index_select(outputs, -1, self.index_selection)
+                # convert 2D matrix to index selection operation
+                self.index_selection = torch.argmax(self.encode_transfer, 1)
+                return torch.index_select(outputs, -1, self.index_selection)
             else:
                 return torch.index_select(outputs, -1, self.index_selection)

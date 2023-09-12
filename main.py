@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import random_split
 import torch.optim as optim
 import torch.nn as nn
-from loss.dynamic_encoding import SwitchEncoding
+from loss.label_switch import LabelSwitch
 from model_define.defined_model import KMNISTNet, CIFARNet, CIFARNet_Infer, IMAGENET
 from vit.vit import ViTForImageClassification
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -252,7 +252,7 @@ else:
     raise Exception("Unable to support the data {}".format(args.dataset))
 
 if args.labelswitch:
-    labelswitch = SwitchEncoding(dataclasses_num, device=device)
+    labelswitch = LabelSwitch(dataclasses_num, device=device)
 else:
     labelswitch = None
 
