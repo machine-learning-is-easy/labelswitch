@@ -13,10 +13,7 @@ class LabelSwitch(torch.nn.Module):
         self.device = device
     def forward(self, outputs, labels=None):
         if labels is None:
-            if hasattr(self, "index_selection"):
-                return torch.index_select(outputs, 1, self.index_selection)
-            else:
-                return torch.inner(outputs, self.encode_transfer)
+            return torch.index_select(outputs, -1, self.index_selection)
         else:
             if len(outputs.shape) != len(labels.shape) + 1:
                 raise Exception("Expected the dimension of output equal dimension of label + 1")
