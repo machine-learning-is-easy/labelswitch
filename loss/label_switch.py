@@ -50,7 +50,7 @@ class LabelSwitch(torch.nn.Module):
         return torch.index_select(outputs, -1, self.index_selection)
 
 
-class LabelSwitch_St(torch.nn.Module):
+class Resonance(torch.nn.Module):
     def __init__(self, num_labels, device=None):
         super().__init__()
         self.st = dict()
