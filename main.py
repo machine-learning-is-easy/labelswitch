@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import random_split
 import torch.optim as optim
 import torch.nn as nn
-from loss.label_switch import LabelSwitch
+from loss.label_switch import LabelSwitch, LabelSwitch_St
 from model_define.defined_model import KMNISTNet, CIFARNet, CIFARNet_Infer, IMAGENET
 from vit.vit import ViTForImageClassification
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -250,7 +250,18 @@ else:
     raise Exception("Unable to support the data {}".format(args.dataset))
 
 if args.labelswitch:
-    labelswitch = LabelSwitch(dataclasses_num, device=device)
+    labelswitch = LabelSwitch_St(dataclasses_num, device=device)
+    if isinstance(labelswitch, LabelSwitch_St):
+        for i, data in enumerate(trainloader, 0):
+            inputs, labels = data
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+            try:
+                outputs = net(inputs)
+            except Exception as ex:
+                raise Exception("Inference model encounter Exceptions")
+            labelswitch.buffer(outputs, labels)
+        labelswitch.create_map()
 else:
     labelswitch = None
 
@@ -334,24 +345,16 @@ for t in range(10):  # train model 10 times
         for i, data in enumerate(trainloader, 0):
             # get the inputs; data is a list of [inputs, labels]
 
-            # forward + backward + optimize
-            if "IMAGENET" in args.dataset:
-                inputs = data["image"].to(device)
-                labels = data["label"].to(device)
-            elif args.dataset == 'POKEMON':
-                inputs = data["image"].to(device)
-                labels = data["labels"].to(device)
-            else:
-                inputs, labels = data
-                inputs = inputs.to(device)
-                labels = labels.to(device)
+            inputs, labels = data
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             try:
                 outputs = net(inputs)
             except Exception as ex:
                 raise Exception("Inference model encounter Exceptions")
 
             if labelswitch:
-                outputs = labelswitch(outputs, labels)
+                outputs = labelswitch(outputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
