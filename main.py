@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import random_split
 import torch.optim as optim
 import torch.nn as nn
-from loss.label_switch import LabelSwitch, Resonance
+from loss.resonance import Resonance
 from model_define.defined_model import KMNISTNet, CIFARNet, CIFARNet_Infer, IMAGENET
 from vit.vit import ViTForImageClassification
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -28,7 +28,7 @@ parser.add_argument('--dataset', '-d', dest='dataset', default="CIFAR10", help='
 parser.add_argument('--model', '-m', dest='model', default="CIFARNet", help='model', required=False)
 parser.add_argument('--opt_alg', '-a', dest='opt_alg', default="ADAM", help='opt_alg', required=False)
 parser.add_argument('--lr', '-lr', dest='lr', type=float, default=1e-4, help='learning rate')
-parser.add_argument('--resonance', '-pt', dest='resonance', default="init_res", help='init_res|full_res')
+parser.add_argument('--resonance', '-pt', dest='resonance', default="nores", help='init_res|full_res')
 
 
 args = parser.parse_args()
@@ -81,7 +81,7 @@ if args.dataset == "CIFAR10":
     elif args.model == "vit":
         net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
     elif args.model == 'resnet':
-        from resnet.model import ResNet
+        from resnet.resnet import ResNet
         net = ResNet(dataclasses_num)
     else:
         raise Exception("Unable to support model type of {}".args.model)
@@ -109,7 +109,7 @@ elif args.dataset == "CIFAR100":
     elif args.model == "vit":
         net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
     elif args.model == 'resnet':
-        from resnet.model import ResNet
+        from resnet.resnet import ResNet
         net = ResNet(dataclasses_num)
     else:
         raise Exception("Unable to support model type of {}".args.model)
@@ -168,12 +168,6 @@ def run_test(net):
 
     return 100 * correct / total
 
-def L2_reg(parameters):
-    L2 = 0
-    for p in parameters:
-        L2 += torch.sum(torch.square(p))
-    return torch.round(L2).item()
-
 def save_model(net, model_path):
     if not os.path.exists(os.path.dirname(model_path)):
         os.makedirs(os.path.dirname(model_path))
@@ -202,7 +196,7 @@ for t in range(10):  # train model 10 times
         running_loss = 0.0
         if args.resonance == "full_res":
             if epoch % 5 == 0:
-                pilot = Resonance(dataclasses_num, device=device)
+                resonance = Resonance(dataclasses_num, device=device)
                 for i, data in enumerate(trainloader, 0):
                     inputs, labels = data
                     inputs = inputs.to(device)
@@ -237,13 +231,12 @@ for t in range(10):  # train model 10 times
         acc_epoch = run_test(net)
         # scheduler.step(metrics=acc_epoch)
         acc_epoch = round(acc_epoch, 2)
-        L2 = L2_reg(net.parameters())
-        acc.append([epoch, acc_epoch, round(running_loss, 2), L2])
-        print("{} time {} epoch acc is {}, L2 is {}".format(t, epoch, acc_epoch, L2))
+        acc.append([epoch, acc_epoch, round(running_loss, 2)])
+        print("{} time {} epoch acc is {}".format(t, epoch, acc_epoch))
     result_file = os.path.join(os.path.join(current_folder, 'result', '{}_{}_{}_result'.format(args.dataset, args.model, args.resonance), "{}.csv".format(str(t))))
     if not os.path.exists(os.path.dirname(result_file)):
         os.makedirs(os.path.dirname(result_file))
-    pd.DataFrame(acc).to_csv(result_file, header=["epoch", "training_acc", "training_loss", "L2"], index=False)
+    pd.DataFrame(acc).to_csv(result_file, header=["epoch", "training_acc", "training_loss"], index=False)
     if isinstance(net, KMNISTNet):
         del net
         del optimizer
