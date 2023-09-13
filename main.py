@@ -120,14 +120,6 @@ elif args.dataset == "CIFAR100":
         raise Exception("Unable to support model type of {}".args.model)
     net = net.to(device)
 
-elif args.dataset == 'IMAGENET':
-    from cv.load_data import load_imagenet_dataset
-    trainloader, testloader, dataclasses_num, image_size = load_imagenet_dataset(TINY_IMAGENET_DATASET)
-    # net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
-    net = IMAGENET(num_class=dataclasses_num, num_channel=3)
-    # reinitialization_model(net)
-    net = net.to(device)
-
 elif args.dataset == 'POKEMON':
     from cv.load_data import load_pokemon_dataset
     trainloader, testloader, dataclasses_num, image_size = load_pokemon_dataset(POKEMON_DATASET)
