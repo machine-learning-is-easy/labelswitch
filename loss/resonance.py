@@ -72,42 +72,46 @@ class Resonance(torch.nn.Module):
 
             outputs = outputs.view(-1, self.num_label)
             labels = labels.flatten()
-            for y, label in zip(outputs, labels):  # remove batch dimension
-                switched_y_row = torch.argmax(torch.index_select(y, -1, self.index_selection))
+            output_digits = torch.argmax(outputs, -1)
+            for y, label in zip(output_digits, labels):  # remove batch dimension
                 if label.item() not in self.st:
                     self.st[label.item()] = dict()
-                if switched_y_row.item() not in self.st[label.item()]:
-                    self.st[label.item()][switched_y_row.item()] = 0
-                self.st[label.item()][switched_y_row.item()] += 1
+                if y.item() not in self.st[label.item()]:
+                    self.st[label.item()][y.item()] = 0
+                self.st[label.item()][y.item()] += 1
 
     def create_map(self):
-        unswitched_index = set([ _ for _ in range(self.num_label)])
-        index_select = [_ for _ in range(self.num_label)]
-
+        switched_label = []
+        switched_output = []
         switch_pair = []
-        for label in self.st:
-            # begin to switch label, find the major output
-            if self.st[label]:
-                output_ind = max(self.st[label], key=self.st[label].get)
-            else:
-                continue
-            # if output_ind is already switched
-            while output_ind not in unswitched_index:
-                self.st[label].pop(output_ind)
-                if self.st[label]:
-                    output_ind = max(self.st[label], key=self.st[label].get)
-                else:
-                    break
+        index_select = [None] * self.num_label
 
-            # switch (label, output_ind)
-            if output_ind in unswitched_index:
-                index_label = index_select.index(label)
-                index_output_ind = index_select.index(output_ind)
-                index_select[index_label], index_select[index_output_ind] = index_select[index_output_ind], index_select[index_label]
-                unswitched_index.remove(output_ind)
-                switch_pair.append((label, output_ind))
+        # create pairs frequency
+        pairs = []
+        for label in self.st.keys():
+            for output, fre in self.st[label].items():
+                pairs.append((label, output, fre))
+        pairs.sort(key=lambda x: x[2], reverse=True)
 
-        self.index_selection = torch.tensor(index_select).to(self.device)
+        for label, output, f in pairs:
+            if label not in switched_label:
+                if output not in switched_output:
+                    index_select[label] = output
+                    switched_label.append(label)
+                    switched_output.append(output)
+                    switch_pair.append((label, output))
+                    if len(switched_label) == self.num_label:
+                        break
+        # does not find index, incase the training set does not include some label dataset
+        unfound_label = set([_ for _ in range(self.num_label)]).difference(set(switched_label))
+        unfound_output = set([_ for _ in range(self.num_label)]).difference(set(switched_output))
+
+        if unfound_label:
+            for ind in range(len(index_select)):
+                if index_select[ind] is None:
+                    index_select[ind] = unfound_output.pop()
+
+        self.index_selection = torch.index_select(self.index_selection, -1, torch.tensor(index_select).to(self.device))
         self.map_complete = True
     def forward(self, outputs):
         return torch.index_select(outputs, -1, self.index_selection)

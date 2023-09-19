@@ -7,28 +7,29 @@ from torch.utils.data import random_split
 import torch.optim as optim
 import torch.nn as nn
 from loss.resonance import Resonance
-from model_define.defined_model import KMNISTNet, CIFARNet, CIFARNet_Infer, IMAGENET
-from vit.vit import ViTForImageClassification
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torchvision.models as models
 import os
 import pandas as pd
-torch.manual_seed(1000)
-torch.cuda.manual_seed(1000)
+from model_define import *
+from model_define.googlenet import googlenet, GoogleNet
+from model_define.resnet import ResNet, resnet18
+torch.manual_seed(100)
+torch.cuda.manual_seed(100)
 import random
-random.seed(1000)
+random.seed(100)
 import argparse
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
                      and callable(models.__dict__[name]))
 parser = argparse.ArgumentParser(description='Train Model')
-parser.add_argument('--epoch', '-e', dest='epoch', default=100, help='epoch')
+parser.add_argument('--epoch', '-e', dest='epoch', default=50, help='epoch')
 parser.add_argument('--dataset', '-d', dest='dataset', default="CIFAR10", help='dataset', required=False)
 parser.add_argument('--model', '-m', dest='model', default="CIFARNet", help='model', required=False)
 parser.add_argument('--opt_alg', '-a', dest='opt_alg', default="ADAM", help='opt_alg', required=False)
-parser.add_argument('--lr', '-lr', dest='lr', type=float, default=1e-4, help='learning rate')
-parser.add_argument('--resonance', '-pt', dest='resonance', default="nores", help='init_res|full_res')
+parser.add_argument('--lr', '-lr', dest='lr', type=float, default=1e-3, help='learning rate')
+parser.add_argument('--resonance', '-pt', dest='resonance', default="no_res", help='no_res|init_res|full_res')
 
 
 args = parser.parse_args()
@@ -51,6 +52,16 @@ batch_size = 128
 
 current_folder = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(current_folder, 'data')
+
+def define_model(model_type, num_class):
+    if model_type.lower() == "googlenet":
+        net = googlenet(num_class)
+    elif model_type.lower() == 'resnet':
+        net = ResNet(num_class)
+    else:
+        raise Exception("Unable to support model type of {}".args.model)
+
+    return net
 
 def reinitialization_model(model):
     for layer in model.children():
@@ -76,18 +87,6 @@ if args.dataset == "CIFAR10":
     image_size = trainset.data.shape[1]
     dataclasses_num = len(trainset.classes)
 
-    if args.model == "CIFARNet":
-        net = CIFARNet(num_class=dataclasses_num, num_channel=num_channel)
-    elif args.model == "vit":
-        net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
-    elif args.model == 'resnet':
-        from resnet.resnet import ResNet
-        net = ResNet(dataclasses_num)
-    else:
-        raise Exception("Unable to support model type of {}".args.model)
-
-    net = net.to(device)
-
 elif args.dataset == "CIFAR100":
     transform = transforms.Compose([transforms.ToTensor()])
 
@@ -104,17 +103,8 @@ elif args.dataset == "CIFAR100":
     image_size = trainset.data.shape[1]
     dataclasses_num = len(trainset.classes)
 
-    if args.model == "CIFARNet":
-        net = CIFARNet(num_class=dataclasses_num, num_channel=num_channel)
-    elif args.model == "vit":
-        net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
-    elif args.model == 'resnet':
-        from resnet.resnet import ResNet
-        net = ResNet(dataclasses_num)
-    else:
-        raise Exception("Unable to support model type of {}".args.model)
-    net = net.to(device)
-
+net = define_model(args.model, dataclasses_num)
+net = net.to(device)
 criterion = nn.CrossEntropyLoss()
 
 
@@ -168,11 +158,6 @@ def run_test(net):
 
     return 100 * correct / total
 
-def save_model(net, model_path):
-    if not os.path.exists(os.path.dirname(model_path)):
-        os.makedirs(os.path.dirname(model_path))
-    torch.save(net.state_dict(), model_path)
-
 
 # 4. Train the network
 for t in range(10):  # train model 10 times
@@ -195,7 +180,7 @@ for t in range(10):  # train model 10 times
     for epoch in range(0, int(args.epoch)):  # loop over the dataset multiple times
         running_loss = 0.0
         if args.resonance == "full_res":
-            if epoch % 5 == 0:
+            if epoch % 2 == 0:
                 resonance = Resonance(dataclasses_num, device=device)
                 for i, data in enumerate(trainloader, 0):
                     inputs, labels = data
@@ -229,7 +214,7 @@ for t in range(10):  # train model 10 times
             running_loss += loss.item()
         model_path = os.path.join(current_folder, 'model', '{}_{}_{}_net.pth'.format(args.dataset, args.model, args.resonance))
         acc_epoch = run_test(net)
-        # scheduler.step(metrics=acc_epoch)
+        scheduler.step(metrics=acc_epoch)
         acc_epoch = round(acc_epoch, 2)
         acc.append([epoch, acc_epoch, round(running_loss, 2)])
         print("{} time {} epoch acc is {}".format(t, epoch, acc_epoch))
@@ -237,40 +222,17 @@ for t in range(10):  # train model 10 times
     if not os.path.exists(os.path.dirname(result_file)):
         os.makedirs(os.path.dirname(result_file))
     pd.DataFrame(acc).to_csv(result_file, header=["epoch", "training_acc", "training_loss"], index=False)
-    if isinstance(net, KMNISTNet):
+    if isinstance(net, ResNet):
         del net
         del optimizer
-        net = KMNISTNet(num_class=dataclasses_num, num_channel=num_channel)
-        net = net.to(device)
-        optimizer = defineopt(net)
-        scheduler = define_scheduler(optimizer)
-    elif isinstance(net, CIFARNet):
+        net = resnet18(dataclasses_num)
+    elif isinstance(net, GoogleNet):
         del net
         del optimizer
-        net = CIFARNet(num_class=dataclasses_num, num_channel=num_channel)
-        net = net.to(device)
-        optimizer = defineopt(net)
-        scheduler = define_scheduler(optimizer)
-    elif isinstance(net, ViTForImageClassification):
-        del net
-        del optimizer
-        net = ViTForImageClassification(num_labels=dataclasses_num, image_size=image_size)
-        net = net.to(device)
-        optimizer = defineopt(net)
-        scheduler = define_scheduler(optimizer)
-    elif isinstance(net, ResNet):
-        del net
-        del optimizer
-        net = ResNet(dataclasses_num)
-        net = net.to(device)
-        optimizer = defineopt(net)
-        scheduler = define_scheduler(optimizer)
-    elif isinstance(net, IMAGENET):
-        del net
-        del optimizer
-        net = IMAGENET(num_class=dataclasses_num, num_channel=3)
-        net = net.to(device)
-        optimizer = defineopt(net)
-        scheduler = define_scheduler(optimizer)
+        net = define_model(args.model, dataclasses_num)
     else:
         raise Exception("Unable to accept the net type")
+
+    net = net.to(device)
+    optimizer = defineopt(net)
+    scheduler = define_scheduler(optimizer)
